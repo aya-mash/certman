@@ -20,11 +20,13 @@ export const authOptions = {
     }),
   ],
   callbacks: {
-    async session({ session, user }: any) {
+    async session({ session, user }: { session: any; user: any }) {
       session.user.id = user.id;
       return session;
     },
   },
+  secret: process.env.NEXTAUTH_SECRET,
+  debug: true, // Enable debug logs
 };
 
 const handler = NextAuth(authOptions);

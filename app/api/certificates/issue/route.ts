@@ -7,6 +7,9 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 
 const prisma = new PrismaClient();
 
+const ZEROSSL_EAB_KEY_ID = process.env.ZEROSSL_EAB_KEY_ID; // Add this to your .env file
+const ZEROSSL_EAB_HMAC_KEY = process.env.ZEROSSL_EAB_HMAC_KEY; // Add this to your .env file
+
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
 
@@ -16,10 +19,30 @@ export async function POST(request: Request) {
 
   const { domain, email } = await request.json();
 
+  if (!domain || !email) {
+    return NextResponse.json(
+      { error: "Domain and email are required" },
+      { status: 400 }
+    );
+  }
+
   try {
     const client = new acme.Client({
-      directoryUrl: acme.directory.letsencrypt.production,
+      directoryUrl: "https://acme.zerossl.com/v2/DV90",
       accountKey: await acme.crypto.createPrivateKey(),
+      externalAccountBinding: {
+        kid: ZEROSSL_EAB_KEY_ID as string,
+        hmacKey: ZEROSSL_EAB_HMAC_KEY as string,
+      },
+    });
+
+    await client.createAccount({
+      termsOfServiceAgreed: true,
+      externalAccountBinding: {
+        kid: ZEROSSL_EAB_KEY_ID as string,
+        hmacKey: ZEROSSL_EAB_HMAC_KEY as string,
+      },
+      contact: [`mailto:${email}`],
     });
 
     const order = await client.createOrder({
@@ -43,15 +66,16 @@ export async function POST(request: Request) {
 
     await client.verifyChallenge(authorizations[0], challenge);
     await client.completeChallenge(challenge);
+
     await client.waitForValidStatus(challenge);
 
-    const [privateKey, csr] = await acme.crypto.createCsr({
+    const [, csr] = await acme.crypto.createCsr({
       commonName: domain,
       altNames: [domain],
       keySize: 2048,
     });
 
-    const { status, expires, certificate } = await client.finalizeOrder(
+    const { certificate, url, status, expires } = await client.finalizeOrder(
       order,
       csr
     );
@@ -59,11 +83,10 @@ export async function POST(request: Request) {
     const data: any = {
       domain,
       email,
-      privateKey,
-      content: certificate, // Save the certificate content
-      status, // Set the initial status
-      url: `https://${domain}/certificate`, // Example URL
-      expires, // Set the expiry date
+      content: certificate,
+      status,
+      url,
+      expires,
       userId: session.user.id,
     };
 
@@ -74,9 +97,13 @@ export async function POST(request: Request) {
     return NextResponse.json({
       message: "Certificate issued successfully",
       certificate: certificateRecord,
+      keyAuthorization,
     });
   } catch (error: any) {
     console.error(error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json(
+      { error: error.message || "Failed to issue certificate" },
+      { status: 500 }
+    );
   }
 }
