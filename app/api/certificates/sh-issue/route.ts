@@ -1,13 +1,14 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { exec } from "child_process";
 import { db as prisma } from "@/lib/prisma";
-import { getSession } from "next-auth/react";
+import { getServerSession } from "next-auth";
 import path from "path";
 import { NextApiRequest, NextApiResponse } from "next";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 
 export async function POST(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") return res.status(405).end();
-  const session = await getSession({ req });
+  const session = await getServerSession(authOptions);
   if (!session) return res.status(401).json({ message: "Unauthorized" });
 
   const {

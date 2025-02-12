@@ -3,15 +3,46 @@
 
 import { useState } from "react";
 import axios from "axios";
-import { ClipboardDocumentIcon, CheckIcon } from "@heroicons/react/24/outline";
+import { Button } from "./ui/button";
+import { Card } from "./ui/card";
+import { ToastAction } from "./ui/toast";
+import { toast } from "@/hooks/use-toast";
+import { CopyableCode } from "./CopyableCode";
 
-export default function Home() {
+export default function Form() {
   const [domain, setDomain] = useState<string>("");
   const [email, setEmail] = useState<string>("");
   const [result, setResult] = useState<string>("");
-  const [keyAuthorization, setKeyAuthorization] = useState<string>("");
+  const [keyAuthorization, setKeyAuthorization] = useState({
+    key: "",
+    token: "",
+  });
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [isCopied, setIsCopied] = useState<boolean>(false);
+  const [isVerified, setIsVerified] = useState<boolean>(false);
+
+  const getKeyAuthorization = async () => {
+    try {
+      const response = await axios.get(
+        `/api/certificates/keyAuthorization?domain=${domain}`
+      );
+      if (response.data.keyAuthorizationd) {
+        setKeyAuthorization({
+          key: response.data.keyAuthorization,
+          token: response.data.token,
+        });
+      }
+    } catch (error: any) {
+      console.error("Could get key authorization:", error);
+    }
+  };
+
+  const toastError = (message: string) =>
+    toast({
+      title: "Uh oh! Something went wrong.",
+      variant: "destructive",
+      description: message,
+      action: <ToastAction altText="Try again">Try again</ToastAction>,
+    });
 
   const issueCert = async () => {
     if (!domain || !email) {
@@ -21,95 +52,88 @@ export default function Home() {
 
     setIsLoading(true);
     setResult("");
-    setKeyAuthorization("");
+    setKeyAuthorization({ key: "", token: "" });
+    setIsVerified(false);
 
     try {
-      const response = await axios.post("/api/certificates/issue", {
+      const response = await axios.post("/api/certificates/order", {
         domain,
         email,
       });
-
-      setResult("Certificate issued successfully");
-      setKeyAuthorization(response.data.keyAuthorization);
+      setResult(response.data.message);
     } catch (error: any) {
-      setResult(error.response?.data?.error || "Failed to issue certificate");
+      console.dir(error);
+      toastError(error.message);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(keyAuthorization).then(() => {
-      setIsCopied(true);
-      setTimeout(() => setIsCopied(false), 2000); // Reset after 2 seconds
-    });
-  };
-
   return (
-    <>
-      <h1 className="text-3xl font-bold mb-8">SSL Certificate Generator</h1>
-      <div className="bg-white p-6 rounded-lg shadow-md">
-        <div className="mb-4">
-          <label htmlFor="domain" className="block text-sm font-medium mb-2">
-            Domain:
-          </label>
-          <input
-            id="domain"
-            type="text"
-            value={domain}
-            onChange={(e) => setDomain(e.target.value)}
-            className="w-full p-2 border rounded-md"
-            placeholder="example.com"
-          />
-        </div>
-        <div className="mb-4">
-          <label htmlFor="email" className="block text-sm font-medium mb-2">
-            Email:
-          </label>
-          <input
-            id="email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full p-2 border rounded-md"
-            placeholder="admin@example.com"
-          />
-        </div>
-        <button
+    <Card className="container mx-auto bg-white p-6 rounded-lg shadow-md">
+      <div className="mb-4">
+        <label htmlFor="domain" className="block text-sm font-medium mb-2">
+          Domain:
+        </label>
+        <input
+          id="domain"
+          type="text"
+          value={domain}
+          onChange={(e) => setDomain(e.target.value)}
+          className="w-full p-2 border rounded-md"
+          placeholder="example.com"
+        />
+      </div>
+      <div className="mb-4">
+        <label htmlFor="email" className="block text-sm font-medium mb-2">
+          Email:
+        </label>
+        <input
+          id="email"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          className="w-full p-2 border rounded-md"
+          placeholder="admin@example.com"
+        />
+      </div>
+      <div className="space-x-2">
+        <Button
           onClick={issueCert}
-          disabled={isLoading}
-          className="px-4 py-2 bg-blue-600 text-white rounded-md disabled:bg-blue-300"
+          disabled={isLoading || email === "" || domain === ""}
+          className="px-4 py-2 text-white rounded-md"
         >
           {isLoading ? "Issuing Certificate..." : "Issue Certificate"}
-        </button>
-        {result && <p className="mt-4 text-sm text-gray-700">{result}</p>}
-        {keyAuthorization && (
-          <div className="mt-4">
-            <label
-              htmlFor="keyAuthorization"
-              className="block text-sm font-medium mb-2"
-            >
-              Key Authorization:
-            </label>
-            <div className="flex items-center bg-gray-50 p-2 rounded-md">
-              <code className="flex-1 text-sm break-all">
-                {keyAuthorization}
-              </code>
-              <button
-                onClick={handleCopy}
-                className="ml-2 p-2 text-gray-500 hover:text-gray-700"
-                aria-label="Copy to clipboard"
-              >
-                {isCopied ? (
-                  <CheckIcon className="h-5 w-5 text-green-500" />
-                ) : (
-                  <ClipboardDocumentIcon className="h-5 w-5" />
-                )}
-              </button>
-            </div>
-          </div>
-        )}
+        </Button>
+        <Button
+          onClick={getKeyAuthorization}
+          disabled={!domain}
+          variant="outline"
+          className="px-4 py-2 rounded-md"
+        >
+          Check Key Authorization
+        </Button>
       </div>
-    </>
+      {result && (
+        <p className="mt-4 text-sm text-gray-700 whitespace-pre-line">
+          {result}
+        </p>
+      )}
+      <CopyableCode
+        code={keyAuthorization.key}
+        title="Key Authorization: "
+        details={
+          keyAuthorization.token &&
+          `Copy the Key Authorization below and create a file at: \n
+          http://${domain}/.well-known/acme-challenge/${keyAuthorization.token}\n\n +
+          Paste the Key Authorization as the content of that file, then the system will detect verification automatically.`
+        }
+      />
+      {isVerified && (
+        <p className="mt-4 text-sm text-green-700">
+          ✅ Your certificate has been successfully issued!
+        </p>
+      )}
+    </Card>
   );
 }

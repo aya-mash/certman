@@ -1,22 +1,19 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { PrismaClient } from "@prisma/client";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { db } from "@/lib/prisma";
 
-const prisma = new PrismaClient();
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const userId = searchParams.get("userId");
 
-export async function GET() {
-  const session = await getServerSession(authOptions);
-
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!userId) {
+    return NextResponse.json({ error: "User ID is required" }, { status: 400 });
   }
 
   try {
-    const certificates = await prisma.certificate.findMany({
+    const certificates = await db.certificate.findMany({
       where: {
-        userId: session.user.id,
+        userId: userId,
       },
       select: {
         id: true,
@@ -28,6 +25,33 @@ export async function GET() {
     });
 
     return NextResponse.json({ certificates });
+  } catch (error: any) {
+    console.error(error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const id = searchParams.get("id");
+
+  if (!id) {
+    return NextResponse.json({ error: "ID is required" }, { status: 400 });
+  }
+
+  try {
+    await db.certificate.delete({
+      where: {
+        id,
+      },
+    });
+
+    return NextResponse.json(
+      {
+        message: "Certificate deleted successfully",
+      },
+      { status: 200 }
+    );
   } catch (error: any) {
     console.error(error);
     return NextResponse.json({ error: error.message }, { status: 500 });
