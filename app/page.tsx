@@ -1,5 +1,4 @@
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { redirect } from "next/navigation";
 import IssueCertificateForm from "@/components/IssueCertificateClientForm";
 import IssueCertificateAutoForm from "@/components/IssueCertificateAutoForm";
@@ -9,6 +8,7 @@ import IssueCertificateShForm from "@/components/IssueCertificateShForm";
 import { Header } from "@/components/Header";
 import Footer from "@/components/Footer";
 import { Toaster } from "@/components/ui/toaster";
+import { authOptions } from "@/lib/authSession";
 
 export default async function Home() {
   const session = await getServerSession(authOptions);

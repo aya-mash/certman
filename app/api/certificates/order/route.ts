@@ -2,8 +2,8 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import acme from "acme-client";
-import { authOptions } from "../../auth/[...nextauth]/route";
 import { db } from "@/lib/prisma";
+import { authOptions } from "@/lib/authSession";
 
 const ZEROSSL_EAB_KEY_ID = process.env.ZEROSSL_EAB_KEY_ID;
 const ZEROSSL_EAB_HMAC_KEY = process.env.ZEROSSL_EAB_HMAC_KEY;

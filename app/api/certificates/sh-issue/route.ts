@@ -4,7 +4,7 @@ import { db as prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import path from "path";
 import { NextApiRequest, NextApiResponse } from "next";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/authSession";
 
 export async function POST(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") return res.status(405).end();
