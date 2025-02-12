@@ -57,10 +57,6 @@ export async function POST(request: Request) {
 
     await client.createAccount({
       termsOfServiceAgreed: true,
-      externalAccountBinding: {
-        kid: ZEROSSL_EAB_KEY_ID,
-        hmacKey: ZEROSSL_EAB_HMAC_KEY,
-      },
       contact: [`mailto:${email}`],
     });
 
@@ -69,7 +65,7 @@ export async function POST(request: Request) {
     });
 
     const authorizations = await client.getAuthorizations(order);
-    const { expires, url, challenges, status } = authorizations[0];
+    const { expires, challenges, status } = authorizations[0];
     const challenge = challenges.find((c) => c.type === "http-01");
 
     if (!challenge) {
@@ -83,6 +79,8 @@ export async function POST(request: Request) {
     const keyAuthorization = await client.getChallengeKeyAuthorization(
       challenge
     );
+
+    const url = client.getAccountUrl();
 
     console.log("Key Authorization:", keyAuthorization);
 
@@ -103,28 +101,22 @@ export async function POST(request: Request) {
 
     const interval = setInterval(async () => {
       try {
-        if (challenge?.status === "valid") {
-          // Complete issuing process
+        const updatedChallenge = await client.completeChallenge(challenge);
+
+        if (updatedChallenge.status === "valid") {
           const [, csr] = await acme.crypto.createCsr({
             commonName: domain,
             altNames: [domain],
             keySize: 2048,
           });
 
-          const {
-            certificate: cert,
-            url,
-            status,
-            expires,
-          } = await client.finalizeOrder(order, csr);
+          const { certificate: cert } = await client.finalizeOrder(order, csr);
 
           await db.certificate.update({
             where: { id: createdData.id },
             data: {
               content: cert,
-              status,
-              url,
-              expires,
+              status: "valid",
             },
           });
 
@@ -135,7 +127,7 @@ export async function POST(request: Request) {
           });
         }
 
-        if (challenge?.status === "invalid") {
+        if (updatedChallenge.status === "invalid") {
           clearInterval(interval);
           return NextResponse.json(
             {
@@ -145,21 +137,21 @@ export async function POST(request: Request) {
             { status: 400 }
           );
         }
-        if (challenge?.status === "pending") {
-          return NextResponse.json({
-            message: "HTTP-01 challenge pending.",
-          });
-        }
-        if (challenge?.status === "processing") {
-          return NextResponse.json({
-            message: "HTTP-01 challenge processing.",
-          });
-        }
       } catch (error: any) {
         console.error("Verification check failed:", error);
       }
     }, 30000); // Check every 30 seconds
+
+    return NextResponse.json({
+      message: "Challenge created. Waiting for verification...",
+      keyAuthorization,
+      token: challenge.token,
+    });
   } catch (error: any) {
-    return NextResponse.json({ error }, { status: 500 });
+    console.error("Error in POST endpoint:", error);
+    return NextResponse.json(
+      { error: error.message || "Internal Server Error" },
+      { status: 500 }
+    );
   }
 }

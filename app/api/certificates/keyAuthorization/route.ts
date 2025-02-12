@@ -19,7 +19,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const certificate: any = await db.certificate.findFirst({
+    const certificate = await db.certificate.findFirst({
       where: { domain },
     });
 
@@ -42,8 +42,8 @@ export async function GET(request: Request) {
   } catch (error: any) {
     return NextResponse.json(
       {
-        error: error ?? "Failed to get key authorization",
-        message: error.message ?? "Failed to get key authorization",
+        error: error.message || "Failed to get key authorization",
+        message: error.message || "Failed to get key authorization",
       },
       {
         status: 500,

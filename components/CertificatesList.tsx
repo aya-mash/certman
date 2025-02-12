@@ -6,7 +6,6 @@ import { toast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Certificate } from "@prisma/client";
-import { LoadingButton } from "./LoadingButton";
 
 export default function CertificatesList({
   userId,
@@ -113,12 +112,9 @@ export default function CertificatesList({
                     >
                       Renew
                     </Button>
-                    <LoadingButton
-                      isLoading={deleting}
-                      onClick={() => handleDelete(cert.id)}
-                    >
+                    <Button onClick={() => handleDelete(cert.id)}>
                       Delete
-                    </LoadingButton>
+                    </Button>
                   </td>
                 </tr>
               ))}

@@ -5,7 +5,6 @@ import { useState } from "react";
 import axios from "axios";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
-import { ToastAction } from "./ui/toast";
 import { toast } from "@/hooks/use-toast";
 import { CopyableCode } from "./CopyableCode";
 
@@ -19,30 +18,26 @@ export default function Form() {
   });
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isVerified, setIsVerified] = useState<boolean>(false);
+  const [isFinalizing, setIsFinalizing] = useState<boolean>(false);
 
   const getKeyAuthorization = async () => {
     try {
       const response = await axios.get(
         `/api/certificates/keyAuthorization?domain=${domain}`
       );
-      if (response.data.keyAuthorizationd) {
-        setKeyAuthorization({
-          key: response.data.keyAuthorization,
-          token: response.data.token,
-        });
-      }
+      setKeyAuthorization({
+        key: response.data.keyAuthorization,
+        token: response.data.token,
+      });
     } catch (error: any) {
-      console.error("Could get key authorization:", error);
+      console.error("Could not get key authorization:", error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch key authorization.",
+        variant: "destructive",
+      });
     }
   };
-
-  const toastError = (message: string) =>
-    toast({
-      title: "Uh oh! Something went wrong.",
-      variant: "destructive",
-      description: message,
-      action: <ToastAction altText="Try again">Try again</ToastAction>,
-    });
 
   const issueCert = async () => {
     if (!domain || !email) {
@@ -61,11 +56,51 @@ export default function Form() {
         email,
       });
       setResult(response.data.message);
+      getKeyAuthorization(); // Fetch key authorization after issuing the certificate
     } catch (error: any) {
       console.dir(error);
-      toastError(error.message);
+      toast({
+        title: "Error",
+        description:
+          error.response?.data?.error || "Failed to issue certificate.",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const finalizeOrder = async () => {
+    if (!domain) {
+      toast({
+        title: "Error",
+        description: "Domain is required.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsFinalizing(true);
+
+    try {
+      const response = await axios.put(
+        `/api/certificates/finalize?domain=${domain}`
+      );
+      setResult(response.data.message);
+      setIsVerified(true);
+      toast({
+        title: "Success",
+        description: "Certificate issued successfully!",
+      });
+    } catch (error: any) {
+      console.error("Failed to finalize order:", error);
+      toast({
+        title: "Error",
+        description: error.response?.data?.error || "Failed to finalize order.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsFinalizing(false);
     }
   };
 
@@ -112,6 +147,12 @@ export default function Form() {
           className="px-4 py-2 rounded-md"
         >
           Check Key Authorization
+        </Button> <Button
+          onClick={finalizeOrder}
+          disabled={!keyAuthorization.key || isFinalizing}
+          className="px-4 py-2 text-white bg-green-600 rounded-md"
+        >
+          {isFinalizing ? "Finalizing..." : "Finalize Order"}
         </Button>
       </div>
       {result && (
@@ -125,7 +166,7 @@ export default function Form() {
         details={
           keyAuthorization.token &&
           `Copy the Key Authorization below and create a file at: \n
-          http://${domain}/.well-known/acme-challenge/${keyAuthorization.token}\n\n +
+          http://${domain}/.well-known/acme-challenge/${keyAuthorization.token}\n
           Paste the Key Authorization as the content of that file, then the system will detect verification automatically.`
         }
       />
