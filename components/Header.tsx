@@ -2,14 +2,13 @@
 
 import Image from "next/image";
 import { Button } from "./ui/button";
-import { signIn, signOut } from "next-auth/react";
+import { signOut } from "next-auth/react";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { Session } from "next-auth";
 import { LoadingButton } from "./LoadingButton";
 import { FaGithub, FaGoogle } from "react-icons/fa";
 
 export const Header = async ({ session }: { session?: Session }) => {
-  
   return (
     <header className="fixed p-2 top-0 w-full bg-background z-50">
       <div className="container mx-auto flex justify-between">
@@ -39,16 +38,10 @@ export const Header = async ({ session }: { session?: Session }) => {
           </div>
         ) : (
           <div className="flex items-center space-x-2">
-            <LoadingButton
-              onClick={() => signIn("google", { callbackUrl: "/" })}
-              icon={<FaGoogle />}
-            >
+            <LoadingButton provider="google" icon={<FaGoogle />}>
               Sign in with Google
             </LoadingButton>
-            <LoadingButton
-              onClick={() => signIn("github", { callbackUrl: "/" })}
-              icon={<FaGithub />}
-            >
+            <LoadingButton provider="github" icon={<FaGithub />}>
               Sign in with GitHub
             </LoadingButton>
           </div>
