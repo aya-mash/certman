@@ -1,89 +1,64 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import acme from "acme-client";
 import { db } from "@/lib/prisma";
 import { authOptions } from "@/lib/authSession";
-
-const ZEROSSL_EAB_KEY_ID = process.env.ZEROSSL_EAB_KEY_ID;
-const ZEROSSL_EAB_HMAC_KEY = process.env.ZEROSSL_EAB_HMAC_KEY;
+import { getAcmeClient } from "@/lib/acme";
 
 export async function PUT(request: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (request.method !== "PUT") {
+    return NextResponse.json({ error: "Method Not Allowed" }, { status: 405 });
+  }
+
   try {
-    const session = await getServerSession(authOptions);
-
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const { searchParams } = new URL(request.url);
-    const domain = searchParams.get("domain");
-
-    if (!domain) {
+    const { orderId, ca } = await request.json();
+    if (!orderId) {
       return NextResponse.json(
-        { error: "Domain is required." },
+        { error: "Missing required parameters." },
         { status: 400 }
       );
     }
 
-    const certificate = await db.certificate.findFirst({
-      where: { domain, userId: session.user.id },
-    });
-
-    if (!certificate) {
-      return NextResponse.json(
-        { error: "Certificate not found." },
-        { status: 404 }
-      );
+    const order = await db.order.findUnique({ where: { id: orderId } });
+    if (!order) {
+      return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
-    if (!ZEROSSL_EAB_KEY_ID || !ZEROSSL_EAB_HMAC_KEY) {
-      console.error("Missing ZeroSSL EAB credentials.");
-      return NextResponse.json(
-        { error: "Server misconfiguration: ZeroSSL credentials missing." },
-        { status: 500 }
-      );
-    }
-
-    const client = new acme.Client({
-      directoryUrl: "https://acme.zerossl.com/v2/DV90",
-      accountKey: certificate.privateKey,
-      accountUrl: certificate.url,
-      externalAccountBinding: {
-        kid: ZEROSSL_EAB_KEY_ID,
-        hmacKey: ZEROSSL_EAB_HMAC_KEY,
-      },
+    const { domain, csr, privateKey }: any = await db.certificate.findUnique({
+      where: { id: order.certificateId },
     });
 
-    const order = await client.getOrder({
-      status: certificate.status,
-      finalizeUrl: certificate.url,
-    } as any);
+    const { client } = await getAcmeClient(domain, ca);
 
-    const [, csr] = await acme.crypto.createCsr({
-      commonName: domain,
-      altNames: [domain],
-      keySize: 2048,
-    });
+    const { certificate, status, expires, url } = await client.finalizeOrder(
+      order as any,
+      csr
+    );
 
-    const { certificate: cert } = await client.finalizeOrder(order, csr);
-
-    await db.certificate.update({
-      where: { id: certificate.id },
+    const updatedCertificate = await db.certificate.update({
+      where: { id: order.certificateId },
       data: {
-        content: cert,
-        status: "valid",
+        status,
+        content: certificate,
+        url,
+        expires,
+        privateKey: privateKey,
+        updatedAt: new Date(),
       },
     });
 
     return NextResponse.json({
-      message: "Certificate issued successfully!",
-      certificate: cert,
+      message: "Certificate finalized successfully",
+      certificate: updatedCertificate,
     });
   } catch (error: any) {
-    console.error("Error finalizing order:", error);
+    console.error("Error in PUT endpoint:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to finalize order." },
+      { error: error.message || "Internal Server Error" },
       { status: 500 }
     );
   }

@@ -2,79 +2,59 @@
 "use client";
 
 import { useState } from "react";
+import { Formik, Form, FormikValues, FormikHelpers } from "formik";
+import * as Yup from "yup";
 import axios from "axios";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
 import { toast } from "@/hooks/use-toast";
 import { CopyableCode } from "./CopyableCode";
+import FormikInputField from "./FormikInputField";
+import FormikSelectField from "./FormikSelectField";
 
-export default function Form() {
-  const [domain, setDomain] = useState<string>("");
-  const [email, setEmail] = useState<string>("");
-  const [result, setResult] = useState<string>("");
-  const [keyAuthorization, setKeyAuthorization] = useState({
-    key: "",
-    token: "",
-  });
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+const domainRegex =
+  /^(?!:\/\/)([a-zA-Z0-9-_]+\.)*[a-zA-Z0-9][a-zA-Z0-9-_]+\.[a-zA-Z]{2,11}$/;
+
+const validationSchema = Yup.object({
+  domain: Yup.string()
+    .matches(domainRegex, "Invalid domain format")
+    .required("Domain is required"),
+  email: Yup.string()
+    .email("Invalid email")
+    .required("Email address is required"),
+  challengeType: Yup.string()
+    .required("Challenge Type is required")
+    .oneOf(["http-01", "dns-01"]),
+  ca: Yup.string()
+    .required("Certificate Authority is required")
+    .oneOf(["zeroSSL", "letsEncrypt"]),
+});
+
+type CertificateFormValues = {
+  domain: string;
+  email: string;
+  challengeType: string;
+  ca: string;
+};
+
+type KeyAuthorization = {
+  key: string;
+  token: string;
+  orderId: string;
+};
+
+export default function CertificateForm() {
+  const [keyAuthorization, setKeyAuthorization] = useState<
+    KeyAuthorization | false
+  >(false);
   const [isVerified, setIsVerified] = useState<boolean>(false);
   const [isFinalizing, setIsFinalizing] = useState<boolean>(false);
 
-  const getKeyAuthorization = async () => {
-    try {
-      const response = await axios.get(
-        `/api/certificates/keyAuthorization?domain=${domain}`
-      );
-      setKeyAuthorization({
-        key: response.data.keyAuthorization,
-        token: response.data.token,
-      });
-    } catch (error: any) {
-      console.error("Could not get key authorization:", error);
+  const finalizeOrder = async (orderId: string, ca: string) => {
+    if (!orderId || !ca) {
       toast({
         title: "Error",
-        description: "Failed to fetch key authorization.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const issueCert = async () => {
-    if (!domain || !email) {
-      setResult("Domain and email are required");
-      return;
-    }
-
-    setIsLoading(true);
-    setResult("");
-    setKeyAuthorization({ key: "", token: "" });
-    setIsVerified(false);
-
-    try {
-      const response = await axios.post("/api/certificates/order", {
-        domain,
-        email,
-      });
-      setResult(response.data.message);
-      getKeyAuthorization(); // Fetch key authorization after issuing the certificate
-    } catch (error: any) {
-      console.dir(error);
-      toast({
-        title: "Error",
-        description:
-          error.response?.data?.error || "Failed to issue certificate.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const finalizeOrder = async () => {
-    if (!domain) {
-      toast({
-        title: "Error",
-        description: "Domain is required.",
+        description: "Missing required fields.",
         variant: "destructive",
       });
       return;
@@ -83,15 +63,17 @@ export default function Form() {
     setIsFinalizing(true);
 
     try {
-      const response = await axios.put(
-        `/api/certificates/finalize?domain=${domain}`
-      );
-      setResult(response.data.message);
+      const response = await axios.put(`/api/certificates/finalize`, {
+        orderId,
+        ca,
+      });
       setIsVerified(true);
       toast({
         title: "Success",
         description: "Certificate issued successfully!",
+        variant: "default",
       });
+      return response.data.message;
     } catch (error: any) {
       console.error("Failed to finalize order:", error);
       toast({
@@ -99,82 +81,136 @@ export default function Form() {
         description: error.response?.data?.error || "Failed to finalize order.",
         variant: "destructive",
       });
+      throw error;
     } finally {
       setIsFinalizing(false);
     }
   };
 
+  const handleSubmit = async (
+    values: FormikValues,
+    { setSubmitting }: FormikHelpers<CertificateFormValues>
+  ) => {
+    try {
+      const response = await axios.post("/api/certificates/order", values);
+      toast({
+        title: "Success",
+        description: "Certificate request submitted!",
+        variant: "default",
+      });
+      setKeyAuthorization({
+        key: response.data?.keyAuthorization,
+        token: response.data?.token,
+        orderId: response.data?.orderId,
+      });
+    } catch (error: any) {
+      console.error("Failed to issue certificate:", error);
+      toast({
+        title: "Error",
+        description:
+          error.response?.data?.error || "Failed to issue certificate.",
+        variant: "destructive",
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
-    <Card className="container mx-auto bg-white p-6 rounded-lg shadow-md">
-      <div className="mb-4">
-        <label htmlFor="domain" className="block text-sm font-medium mb-2">
-          Domain:
-        </label>
-        <input
-          id="domain"
-          type="text"
-          value={domain}
-          onChange={(e) => setDomain(e.target.value)}
-          className="w-full p-2 border rounded-md"
-          placeholder="example.com"
-        />
-      </div>
-      <div className="mb-4">
-        <label htmlFor="email" className="block text-sm font-medium mb-2">
-          Email:
-        </label>
-        <input
-          id="email"
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="w-full p-2 border rounded-md"
-          placeholder="admin@example.com"
-        />
-      </div>
-      <div className="space-x-2">
-        <Button
-          onClick={issueCert}
-          disabled={isLoading || email === "" || domain === ""}
-          className="px-4 py-2 text-white rounded-md"
-        >
-          {isLoading ? "Issuing Certificate..." : "Issue Certificate"}
-        </Button>
-        <Button
-          onClick={getKeyAuthorization}
-          disabled={!domain}
-          variant="outline"
-          className="px-4 py-2 rounded-md"
-        >
-          Check Key Authorization
-        </Button> <Button
-          onClick={finalizeOrder}
-          disabled={!keyAuthorization.key || isFinalizing}
-          className="px-4 py-2 text-white bg-green-600 rounded-md"
-        >
-          {isFinalizing ? "Finalizing..." : "Finalize Order"}
-        </Button>
-      </div>
-      {result && (
-        <p className="mt-4 text-sm text-gray-700 whitespace-pre-line">
-          {result}
-        </p>
-      )}
-      <CopyableCode
-        code={keyAuthorization.key}
-        title="Key Authorization: "
-        details={
-          keyAuthorization.token &&
-          `Copy the Key Authorization below and create a file at: \n
-          http://${domain}/.well-known/acme-challenge/${keyAuthorization.token}\n
-          Paste the Key Authorization as the content of that file, then the system will detect verification automatically.`
-        }
-      />
-      {isVerified && (
-        <p className="mt-4 text-sm text-green-700">
-          ✅ Your certificate has been successfully issued!
-        </p>
-      )}
+    <Card className="w-full bg-white p-8 rounded-xl shadow-lg">
+      <Formik
+        initialValues={{
+          domain: "",
+          email: "",
+          challengeType: "",
+          ca: "",
+        }}
+        validationSchema={validationSchema}
+        onSubmit={handleSubmit}
+      >
+        {({ isSubmitting, values, dirty, isValid }) => (
+          <Form className="space-y-4">
+            <FormikInputField
+              name="domain"
+              label="Domain"
+              placeholder="example.com"
+            />
+            <FormikInputField
+              name="email"
+              label="Email Address"
+              placeholder="admin@example.com"
+            />
+
+            <FormikSelectField
+              name="challengeType"
+              label="Challenge Type"
+              options={[
+                { label: "HTTP-01", value: "http-01" },
+                { label: "DNS-01", value: "dns-01" },
+              ]}
+              placeholder="Select a challenge type"
+            />
+
+            <FormikSelectField
+              name="ca"
+              label="Certificate Authority"
+              options={[
+                { label: "ZeroSSL", value: "zeroSSL" },
+                { label: "Let's Encrypt", value: "letsEncrypt" },
+              ]}
+              placeholder="Select a certificate authority"
+            />
+
+            <Button
+              type="submit"
+              disabled={isSubmitting || !isValid || !dirty}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+            >
+              {isSubmitting ? "Submitting..." : "Issue Certificate"}
+            </Button>
+
+            {keyAuthorization && (
+              <div className="mt-4">
+                <h3 className="text-sm font-medium text-gray-700">
+                  Authorization Key
+                </h3>
+                <CopyableCode
+                  title="Key Authorization: "
+                  code={keyAuthorization.key}
+                  details={
+                    keyAuthorization.token &&
+                    `Copy the Key Authorization below and create a file at: \n
+                    http://${values.domain}/.well-known/acme-challenge/${keyAuthorization.token}\n
+                    Paste the Key Authorization as the content of that file, then the system will detect verification automatically.`
+                  }
+                />
+              </div>
+            )}
+
+            {keyAuthorization && (
+              <Button
+                onClick={async () => {
+                  try {
+                    await finalizeOrder(keyAuthorization.orderId, values.ca);
+                  } catch (error) {
+                    console.error("Error finalizing order:", error);
+                  }
+                }}
+                disabled={!keyAuthorization.key || isFinalizing}
+                className="w-full bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400 mt-4"
+              >
+                {isFinalizing ? "Finalizing..." : "Finalize Order"}
+              </Button>
+            )}
+
+            {isVerified && (
+              <p className="mt-4 text-sm text-green-700">
+                ✅ Your certificate has been successfully issued!
+              </p>
+            )}
+          </Form>
+        )}
+      </Formik>
     </Card>
   );
 }
