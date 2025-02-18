@@ -1,7 +1,7 @@
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import IssueCertificateForm from "@/components/IssueCertificateClientForm";
-// import CertificatesList from "@/components/CertificatesList";
+import CertificatesList from "@/components/CertificatesList";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import IssueCertificateShForm from "@/components/IssueCertificateShForm";
 import { Header } from "@/components/Header";
@@ -31,7 +31,7 @@ export default async function Home() {
             <TabsTrigger value="sh">ACME.SH</TabsTrigger>
           </TabsList>
           <TabsContent value="certificates">
-            {/* <CertificatesList userId={session.user.id} /> */}
+            <CertificatesList userId={session.user.id} />
           </TabsContent>
           <TabsContent value="client">
             <IssueCertificateForm />
