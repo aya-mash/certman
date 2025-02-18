@@ -91,7 +91,7 @@ export async function POST(request: Request) {
         privateKey: String(privateKey),
         token: "",
         url: "",
-      },
+      } as any,
     });
 
     return NextResponse.json({
