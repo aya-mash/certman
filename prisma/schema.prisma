@@ -3,7 +3,6 @@
 
 // Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
 // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -14,14 +13,15 @@ datasource db {
 }
 
 model User {
-  id            String        @id @default(cuid()) @map("_id")
-  name          String?
-  email         String?       @unique
-  emailVerified DateTime?
-  image         String?
-  accounts      Account[]
-  sessions      Session[]
-  Certificate   Certificate[]
+  id             String           @id @default(cuid()) @map("_id")
+  name           String?
+  email          String?          @unique
+  emailVerified  DateTime?
+  image          String?
+  accounts       Account[]
+  sessions       Session[]
+  certificates   Certificate[]
+  AccountDetails AccountDetails[]
 }
 
 model Account {
@@ -38,7 +38,8 @@ model Account {
   id_token          String?
   session_state     String?
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  Certificate Certificate[]
 
   @@unique([provider, providerAccountId])
 }
@@ -67,12 +68,48 @@ model Certificate {
   content          String
   keyAuthorization String
   token            String
-  privateKey       String // The Csr private key 
-  status           String // Status of the certificate (e.g., "issued", "expired")
-  url              String // URL to download the certificate
-  expires          DateTime // Expiry date of the certificate
+  privateKey       String
+  csr              String
+  status           String
+  url              String
+  expires          DateTime
   userId           String
   user             User     @relation(fields: [userId], references: [id])
+  account          Account  @relation(fields: [accountId], references: [id])
+  accountId        String
+  orders           Order[]
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
+}
+
+model AccountDetails {
+  id                       String                 @id @default(cuid()) @map("_id")
+  status                   String
+  contact                  String[]
+  termsOfServiceAgreed     Boolean
+  externalAccountBinding   ExternalAccountBinding @relation(fields: [externalAccountBindingId], references: [id])
+  orders                   String
+  userId                   String
+  user                     User                   @relation(fields: [userId], references: [id])
+  externalAccountBindingId String
+}
+
+model ExternalAccountBinding {
+  id             String           @id @default(cuid()) @map("_id")
+  payload        String
+  protected      String
+  signature      String
+  AccountDetails AccountDetails[]
+}
+
+model Order {
+  id            String      @id @default(cuid()) @map("_id")
+  status        String
+  expires       DateTime
+  finalize      String
+  url           String
+  certificateId String
+  certificate   Certificate @relation(fields: [certificateId], references: [id])
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
 }

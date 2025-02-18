@@ -9,6 +9,7 @@ import { LoadingButton } from "./LoadingButton";
 import { FaGithub, FaGoogle } from "react-icons/fa";
 
 export const Header = async ({ session }: { session?: Session }) => {
+  const avatarImage = session?.user?.image;
   return (
     <header className="fixed p-2 top-0 w-full bg-background z-50">
       <div className="container mx-auto flex justify-between">
@@ -17,6 +18,7 @@ export const Header = async ({ session }: { session?: Session }) => {
             src="/logo.png"
             width={200}
             height={60}
+            loading="lazy"
             alt="Foonda Logo"
             className="h-12 py-1 w-auto object-contain filter invert"
           />
@@ -25,7 +27,7 @@ export const Header = async ({ session }: { session?: Session }) => {
         {session ? (
           <div className="flex items-center space-x-2">
             <Avatar>
-              <AvatarImage src={session.user?.image ?? ""} />
+              <AvatarImage src={avatarImage ?? ""} loading="lazy" />
               <AvatarFallback>
                 {session.user?.name
                   ?.split(" ")
