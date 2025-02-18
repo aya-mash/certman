@@ -130,7 +130,7 @@ export async function POST(request: Request) {
         privateKey: String(privateKey),
         token: challenge.token,
         url: "",
-      },
+      } as any,
     });
 
     const createdOrder = await db.order.create({
