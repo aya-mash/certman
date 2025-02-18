@@ -99,7 +99,7 @@ export default function CertificateForm() {
         variant: "default",
       });
       setKeyAuthorization({
-        key: response.data?.keyAuthorization,
+        key: response.data?.key,
         token: response.data?.token,
         orderId: response.data?.orderId,
       });

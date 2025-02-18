@@ -67,18 +67,24 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unsupported CA" }, { status: 400 });
     }
 
-    const { client } = await getAcmeClient(domain, ca);
+    const { client,csr,privateKey } = await getAcmeClient(domain, ca);
 
     const accountKey = await jose.generateKeyPair("ES256", {
       extractable: true,
     });
     const accountKeyJwk = await jose.exportJWK(accountKey.privateKey);
-    const eab = await createExternalAccountBinding(accountKeyJwk);
+    const jws = await createExternalAccountBinding(accountKeyJwk);
 
     await client.createAccount({
       termsOfServiceAgreed: true,
       contact: [`mailto:${email}`],
-      externalAccountBinding: eab as any,
+      externalAccountBinding: {
+        payload: {
+          kid: eabKid,
+          hmacKey: eabHmacKey,
+        },
+        signature: jws,
+      },
     });
 
     const order = await client.createOrder({
@@ -111,13 +117,29 @@ export async function POST(request: Request) {
 
     console.log("Key Authorization:", keyAuthorization);
 
+    const createdCertificate = await db.certificate.create({
+      data: {
+        domain,
+        userId: session.user.id,
+        status: "pending",
+        csr: String(csr),
+        email,
+        content: "",
+        expires: String(order.expires),
+        keyAuthorization,
+        privateKey: String(privateKey),
+        token: challenge.token,
+        url: "",
+      },
+    });
+
     const createdOrder = await db.order.create({
       data: {
         expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
         finalize: order.finalize,
         status: "pending",
         url: order.url,
-        certificateId: "",
+        certificateId: createdCertificate?.id,
       },
     });
 
